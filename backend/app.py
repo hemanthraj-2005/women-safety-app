@@ -3,7 +3,10 @@ from flask_cors import CORS
 import requests
 from datetime import datetime
 import pickle
+import os
 
+TOKEN = os.getenv("8739495996:AAHoy0mhH0wn7IrX4xrhkMAEcjmJ7mg_lLM")
+CHAT_ID = os.getenv("2145164077")
 try:
     import firebase_admin
     from firebase_admin import credentials, firestore
