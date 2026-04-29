@@ -2,57 +2,19 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
 from datetime import datetime
-import pickle
 import os
-
-TOKEN = os.getenv("8739495996:AAHoy0mhH0wn7IrX4xrhkMAEcjmJ7mg_lLM")
-CHAT_ID = os.getenv("2145164077")
-try:
-    import firebase_admin
-    from firebase_admin import credentials, firestore
-    FIREBASE_AVAILABLE = True
-except:
-    FIREBASE_AVAILABLE = False
-
-try:
-    from tensorflow.keras.models import load_model
-    from tensorflow.keras.preprocessing.sequence import pad_sequences
-    ML_AVAILABLE = True
-except:
-    ML_AVAILABLE = False
-
 
 app = Flask(__name__)
 CORS(app)
 
-TOKEN = "8739495996:AAHoy0mhH0wn7IrX4xrhkMAEcjmJ7mg_lLM"
-CHAT_ID = "2145164077"
-
-db = None
-
-if FIREBASE_AVAILABLE:
-    try:
-        cred = credentials.Certificate("firebase-key.json")
-        firebase_admin.initialize_app(cred)
-        db = firestore.client()
-        print("Firebase connected.")
-    except Exception as e:
-        print("Firebase not connected:", e)
-
-model = None
-tokenizer = None
-
-if ML_AVAILABLE:
-    try:
-        model = load_model("distress_model.h5")
-        with open("tokenizer.pkl", "rb") as f:
-            tokenizer = pickle.load(f)
-        print("TensorFlow model loaded.")
-    except Exception as e:
-        print("ML model not loaded:", e)
-
+TOKEN = os.getenv("8739495996:AAHoy0mhH0wn7IrX4xrhkMAEcjmJ7mg_lLM")
+CHAT_ID = os.getenv("2145164077")
 
 def send_telegram(message):
+    if not TOKEN or not CHAT_ID:
+        print("Telegram token or chat ID missing")
+        return {"ok": False}
+
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
 
     response = requests.post(url, data={
@@ -63,11 +25,8 @@ def send_telegram(message):
     print("Telegram Response:", response.json())
     return response.json()
 
-
-@app.route("/predict-distress", methods=["POST"])
-def predict_distress():
-    data = request.get_json()
-    text = data.get("text", "").lower()
+def detect_distress(text):
+    text = text.lower()
 
     distress_words = [
         "help",
@@ -77,28 +36,26 @@ def predict_distress():
         "danger",
         "emergency",
         "attack",
-        "someone is following me"
+        "someone is following me",
+        "follow me",
+        "i am scared"
     ]
 
     distress = any(word in text for word in distress_words)
+    confidence = 0.95 if distress else 0.10
 
-    return jsonify({
-        "text": text,
-        "distress": distress,
-        "confidence": 0.95 if distress else 0.10
-    })
+    return distress, confidence
 
 @app.route("/")
 def home():
     return "HerShield Backend Running"
 
-
 @app.route("/predict-distress", methods=["POST"])
-def predict_distress():
+def predict_distress_route():
     data = request.get_json()
     text = data.get("text", "")
 
-    distress, confidence = predict_distress_text(text)
+    distress, confidence = detect_distress(text)
 
     return jsonify({
         "text": text,
@@ -106,7 +63,6 @@ def predict_distress():
         "confidence": confidence,
         "confidence_percent": round(confidence * 100, 2)
     })
-
 
 @app.route("/send-sos", methods=["POST"])
 def send_sos():
@@ -138,51 +94,15 @@ Live Location:
 
     send_telegram(telegram_message)
 
-    alert_data = {
-        "name": name,
-        "latitude": latitude,
-        "longitude": longitude,
-        "trigger": trigger,
-        "location_type": location_type,
-        "confidence": confidence,
-        "confidence_percent": round(confidence * 100, 2),
-        "location": location_link,
-        "time": current_time
-    }
-
-    if db:
-        try:
-            db.collection("alerts").add(alert_data)
-        except Exception as e:
-            print("Firestore save failed:", e)
-
     return jsonify({
         "success": True,
         "message": "SOS sent successfully",
-        "location": location_link,
-        "alert": alert_data
+        "location": location_link
     })
-
 
 @app.route("/history", methods=["GET"])
 def history():
-    if not db:
-        return jsonify([])
-
-    alerts = []
-
-    try:
-        docs = db.collection("alerts").stream()
-        for doc in docs:
-            item = doc.to_dict()
-            item["id"] = doc.id
-            alerts.append(item)
-    except Exception as e:
-        print("History fetch failed:", e)
-
-    alerts.reverse()
-    return jsonify(alerts)
-
+    return jsonify([])
 
 if __name__ == "__main__":
     app.run()
