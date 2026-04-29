@@ -61,10 +61,12 @@ def send_telegram(message):
     return response.json()
 
 
-def predict_distress_text(text):
-    text = text.lower()
+@app.route("/predict-distress", methods=["POST"])
+def predict_distress():
+    data = request.get_json()
+    text = data.get("text", "").lower()
 
-    emergency_words = [
+    distress_words = [
         "help",
         "help me",
         "please help",
@@ -72,24 +74,16 @@ def predict_distress_text(text):
         "danger",
         "emergency",
         "attack",
-        "i am in danger",
         "someone is following me"
     ]
 
-    if any(word in text for word in emergency_words):
-        return True, 0.95
+    distress = any(word in text for word in distress_words)
 
-    if model is not None and tokenizer is not None:
-        try:
-            sequence = tokenizer.texts_to_sequences([text])
-            padded = pad_sequences(sequence, maxlen=10, padding="post")
-            prediction = float(model.predict(padded, verbose=0)[0][0])
-            return bool(prediction > 0.5), prediction
-        except Exception as e:
-            print("ML prediction failed:", e)
-
-    return False, 0.10
-
+    return jsonify({
+        "text": text,
+        "distress": distress,
+        "confidence": 0.95 if distress else 0.10
+    })
 
 @app.route("/")
 def home():

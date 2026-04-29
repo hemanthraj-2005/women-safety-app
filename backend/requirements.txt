@@ -2,7 +2,4 @@ flask
 flask-cors
 requests
 firebase-admin
-tensorflow
-scikit-learn
-numpy
 gunicorn
